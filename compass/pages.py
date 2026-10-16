@@ -76,6 +76,7 @@ def documents_page(store) -> None:
             f"Upload files ({', '.join(ALLOWED_EXTENSIONS)}; up to {MAX_UPLOAD_BYTES // 1024 // 1024} MB each)",
             type=list(ALLOWED_EXTENSIONS),
             accept_multiple_files=True,
+            max_upload_size=MAX_UPLOAD_BYTES // 1024 // 1024,  # MB; the widget default is 200
             key=uploader_key,
         )
         submitted = st.form_submit_button("Add to Compass")
@@ -176,7 +177,7 @@ def privacy_page(store, client) -> None:
     )
     with st.form("delete_form"):
         confirm = st.text_input("Type DELETE to confirm")
-        if st.form_submit_button("Delete everything", type="primary"):
+        if st.form_submit_button(":red[Delete everything]"):
             if confirm.strip() != "DELETE":
                 st.error("Type DELETE (in capitals) to confirm.")
             else:

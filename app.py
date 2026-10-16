@@ -141,7 +141,7 @@ def main() -> None:
             st.warning(f"Couldn't load your profile and past sessions: {exc}")
 
     with st.sidebar:
-        st.write(user.email)
+        st.text(user.email)  # not st.write: markdown would turn it into a mailto link
         # Not disabled when empty: this renders before the chat page handles a new
         # message, so a disabled state would be stale for the first exchange.
         if st.button("End session",
