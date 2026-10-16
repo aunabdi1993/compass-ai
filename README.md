@@ -19,7 +19,7 @@ Not yet (Week 2+): consent screen, delete-my-data, anonymisation, thumbs up/down
 
 1. **Supabase**: create a project, then run `database/schema.sql` in the SQL editor.
 2. **Login email**: in Supabase go to Authentication > Email Templates > "Magic Link" and make the body include the code, e.g. `Your Compass sign-in code: {{ .Token }}`. The app asks users to type that code (Streamlit can't read the token from a magic-link redirect).
-3. **Secrets**: copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` and fill it in. Use the Supabase **anon** key, never the service key. The file is git-ignored.
+3. **Secrets**: copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` and fill in `OPENROUTER_API_KEY`, `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` (Supabase > Settings > API Keys; formerly called the anon key, and the old `SUPABASE_ANON_KEY` name still works). Never use the secret/service-role key or the JWKS URL: the app refuses to start with a secret key, and it doesn't need JWKS because Supabase enforces access through Row Level Security. The file is git-ignored.
 4. **Spend cap**: create an OpenRouter API key at openrouter.ai/keys and give it a credit limit. The in-app daily limit is only a second line of defence.
 5. Run:
 

@@ -13,7 +13,7 @@ def _client(settings):
     # One Supabase client per browser session; a shared one would mix users' tokens.
     if "sb_client" not in st.session_state:
         st.session_state["sb_client"] = create_client(
-            settings.supabase_url, settings.supabase_anon_key
+            settings.supabase_url, settings.supabase_key
         )
     return st.session_state["sb_client"]
 

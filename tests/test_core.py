@@ -90,11 +90,31 @@ def test_end_conversation_and_catch_up():
 
 
 def test_load_settings(monkeypatch):
-    for name in ("OPENROUTER_API_KEY", "SUPABASE_URL", "SUPABASE_ANON_KEY", "COMPASS_MODEL"):
+    for name in ("OPENROUTER_API_KEY", "SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_ANON_KEY", "COMPASS_MODEL"):
         monkeypatch.delenv(name, raising=False)
     with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
         load_settings({})
-    s = load_settings({"OPENROUTER_API_KEY": "k", "SUPABASE_URL": "u", "SUPABASE_ANON_KEY": "a"})
+    s = load_settings({"OPENROUTER_API_KEY": "k", "SUPABASE_URL": "u", "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_a"})
     assert s.model == "meta-llama/llama-4-maverick" and s.daily_message_limit == 50
     monkeypatch.setenv("COMPASS_MODEL", "meta-llama/llama-4-scout")
-    assert load_settings({"OPENROUTER_API_KEY": "k", "SUPABASE_URL": "u", "SUPABASE_ANON_KEY": "a"}).model == "meta-llama/llama-4-scout"
+    assert load_settings({"OPENROUTER_API_KEY": "k", "SUPABASE_URL": "u", "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_a"}).model == "meta-llama/llama-4-scout"
+
+
+def test_legacy_anon_key_name_still_works(monkeypatch):
+    monkeypatch.delenv("SUPABASE_PUBLISHABLE_KEY", raising=False)
+    s = load_settings({"OPENROUTER_API_KEY": "k", "SUPABASE_URL": "u", "SUPABASE_ANON_KEY": "anon"})
+    assert s.supabase_key == "anon"
+
+
+def test_secret_keys_are_rejected():
+    import base64, json
+
+    def jwt(role):
+        body = base64.urlsafe_b64encode(json.dumps({"role": role}).encode()).decode().rstrip("=")
+        return f"h.{body}.s"
+
+    base = {"OPENROUTER_API_KEY": "k", "SUPABASE_URL": "u"}
+    for bad in ("sb_secret_abc", jwt("service_role")):
+        with pytest.raises(RuntimeError, match="secret"):
+            load_settings({**base, "SUPABASE_PUBLISHABLE_KEY": bad})
+    assert load_settings({**base, "SUPABASE_PUBLISHABLE_KEY": jwt("anon")}).supabase_key

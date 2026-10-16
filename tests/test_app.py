@@ -11,7 +11,7 @@ import compass.db
 from tests.fakes import FakeLLM, FakeStore
 
 APP = str(Path(__file__).resolve().parent.parent / "app.py")
-ENV = {"OPENROUTER_API_KEY": "k", "SUPABASE_URL": "http://x", "SUPABASE_ANON_KEY": "a"}
+ENV = {"OPENROUTER_API_KEY": "k", "SUPABASE_URL": "http://x", "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_a"}
 
 
 @pytest.fixture
