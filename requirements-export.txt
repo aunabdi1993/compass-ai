@@ -1,0 +1,6 @@
+# Only needed to run scripts/export_training_data.py on your own machine.
+-r requirements.txt
+presidio-analyzer>=2.2
+presidio-anonymizer>=2.2
+spacy>=3.7
+# then: python -m spacy download en_core_web_lg

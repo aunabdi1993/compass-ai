@@ -45,6 +45,8 @@ def sign_out(client) -> None:
 
 def login_screen(client) -> None:
     st.title("Compass")
+    if notice := st.session_state.pop("notice", None):
+        st.success(notice)
     st.caption("Your AI career coach. Sign in with your email, no password needed.")
 
     email = st.session_state.get("login_email")

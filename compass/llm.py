@@ -69,9 +69,12 @@ class OpenRouterClient:
             raise error_cls(detail or f"HTTP {response.status_code}", response.status_code)
         return response
 
-    def chat(self, model: str, messages: list[dict], max_tokens: int) -> dict:
+    def chat(self, model: str, messages: list[dict], max_tokens: int, temperature: float | None = None) -> dict:
         """Non-streaming request; returns the parsed JSON response."""
-        response = self._post({"model": model, "messages": messages, "max_tokens": max_tokens}, stream=False)
+        payload = {"model": model, "messages": messages, "max_tokens": max_tokens}
+        if temperature is not None:
+            payload["temperature"] = temperature
+        response = self._post(payload, stream=False)
         data = response.json()
         if "error" in data:
             raise LLMError(data["error"].get("message", "unknown error"))

@@ -32,8 +32,8 @@ class Store:
         res = self._table("conversations").insert({"user_id": self._user_id}).execute()
         return res.data[0]["id"]
 
-    def add_message(self, conversation_id: str, role: str, content: str) -> None:
-        self._table("messages").insert(
+    def add_message(self, conversation_id: str, role: str, content: str) -> int:
+        res = self._table("messages").insert(
             {
                 "conversation_id": conversation_id,
                 "user_id": self._user_id,
@@ -41,6 +41,16 @@ class Store:
                 "content": content,
             }
         ).execute()
+        return res.data[0]["id"]
+
+    def set_feedback(self, message_id: int, value: int | None) -> None:
+        """Thumbs up (1), thumbs down (-1), or cleared (None), saved on the message."""
+        self._table("messages").update(
+            {
+                "feedback": value,
+                "feedback_at": datetime.now(timezone.utc).isoformat() if value else None,
+            }
+        ).eq("id", message_id).eq("user_id", self._user_id).execute()
 
     def get_messages(self, conversation_id: str) -> list[dict]:
         res = (
@@ -95,3 +105,61 @@ class Store:
         if exclude_id:
             query = query.neq("id", exclude_id)
         return [row["id"] for row in query.execute().data]
+
+    # consent ---------------------------------------------------------------
+    def get_consent(self) -> dict:
+        res = self._table("consents").select("*").eq("user_id", self._user_id).limit(1).execute()
+        return res.data[0] if res.data else {}
+
+    def save_consent(self, version: str, training_opt_in: bool) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        self._table("consents").upsert(
+            {
+                "user_id": self._user_id,
+                "version": version,
+                "accepted_at": now,
+                "training_opt_in": training_opt_in,
+                "updated_at": now,
+            }
+        ).execute()
+
+    def set_training_opt_in(self, opted_in: bool) -> None:
+        self._table("consents").update(
+            {"training_opt_in": opted_in, "updated_at": datetime.now(timezone.utc).isoformat()}
+        ).eq("user_id", self._user_id).execute()
+
+    # documents -------------------------------------------------------------
+    def list_documents(self) -> list[dict]:
+        res = (
+            self._table("documents")
+            .select("id, name, content, char_count, truncated, enabled, created_at")
+            .eq("user_id", self._user_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return res.data
+
+    def add_document(self, name: str, content: str, truncated: bool) -> None:
+        self._table("documents").insert(
+            {
+                "user_id": self._user_id,
+                "name": name,
+                "content": content,
+                "char_count": len(content),
+                "truncated": truncated,
+            }
+        ).execute()
+
+    def set_document_enabled(self, document_id: str, enabled: bool) -> None:
+        self._table("documents").update({"enabled": enabled}).eq("id", document_id).eq(
+            "user_id", self._user_id
+        ).execute()
+
+    def delete_document(self, document_id: str) -> None:
+        self._table("documents").delete().eq("id", document_id).eq("user_id", self._user_id).execute()
+
+    # privacy ---------------------------------------------------------------
+    def delete_my_data(self) -> None:
+        """Remove chats, documents, profile and consent in one database call."""
+        self._client.auth.get_session()  # refresh the access token first
+        self._client.rpc("delete_my_data").execute()
