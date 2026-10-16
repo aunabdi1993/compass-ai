@@ -17,9 +17,9 @@ describe("Login", () => {
     const auth = fakeAuth({ status: "signedOut" });
     render(<AuthContext.Provider value={auth}><Login /></AuthContext.Provider>);
     await userEvent.type(screen.getByLabelText("Email address"), "aun@example.com");
-    await userEvent.click(screen.getByRole("button", { name: "Email me a code" }));
+    await userEvent.click(screen.getByRole("button", { name: "Email me a sign-in link" }));
     expect(auth.sendCode).toHaveBeenCalledWith("aun@example.com");
-    expect(await screen.findByText(/We sent a code to/)).toBeInTheDocument();
+    expect(await screen.findByText(/We emailed/)).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText("Code from the email"), "123456");
     await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
     expect(auth.verifyCode).toHaveBeenCalledWith("aun@example.com", "123456");
@@ -29,11 +29,26 @@ describe("Login", () => {
     const auth = fakeAuth({ status: "signedOut", verifyCode: vi.fn(async () => { throw new Error("That code didn't work."); }) });
     render(<AuthContext.Provider value={auth}><Login /></AuthContext.Provider>);
     await userEvent.type(screen.getByLabelText("Email address"), "a@b.co");
-    await userEvent.click(screen.getByRole("button", { name: "Email me a code" }));
+    await userEvent.click(screen.getByRole("button", { name: "Email me a sign-in link" }));
     await userEvent.type(await screen.findByLabelText("Code from the email"), "000000");
     await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("didn't work");
     expect(screen.getByRole("button", { name: "Sign in" })).toBeEnabled();
+  });
+
+  it("tells the user when an emailed link has expired or was already used", () => {
+    window.location.hash = "#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired";
+    render(<AuthContext.Provider value={fakeAuth({ status: "signedOut" })}><Login /></AuthContext.Provider>);
+    expect(screen.getByRole("alert")).toHaveTextContent("expired or was already used");
+    expect(window.location.hash).toBe(""); // cleaned from the address bar
+  });
+
+  it("explains that the emailed link signs you in, with the code as a fallback", async () => {
+    render(<AuthContext.Provider value={fakeAuth({ status: "signedOut" })}><Login /></AuthContext.Provider>);
+    await userEvent.type(screen.getByLabelText("Email address"), "aun@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Email me a sign-in link" }));
+    expect(await screen.findByText(/Click the sign-in link in the email/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Code from the email")).toBeInTheDocument();
   });
 
   it("shows the note left behind after deleting data", () => {

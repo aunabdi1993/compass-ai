@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import jwt
 from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from jwt.algorithms import ECAlgorithm
 
 from compass.api import create_app
@@ -72,13 +72,28 @@ compass = create_app(settings, store_factory=lambda user: store, llm=SlowLLM())
 
 app = FastAPI()  # the fake Supabase sits in front; everything else goes to the real Compass app
 last_email = {"value": "aun@example.com"}
+last_redirect = {"value": None}
 
 
 @app.post("/auth/v1/otp")
 async def otp(request: Request):
     body = await request.json()
     last_email["value"] = body.get("email", last_email["value"])
+    last_redirect["value"] = request.query_params.get("redirect_to")  # where the emailed link should return to
     return {}
+
+
+@app.get("/e2e/last-redirect")
+async def last_redirect_seen():
+    return {"redirect_to": last_redirect["value"]}
+
+
+@app.get("/e2e/magic-link")
+async def magic_link():
+    """What clicking the link in the email does: Supabase sends the browser back to the app with a session in the URL."""
+    session = make_session(last_email["value"])
+    fragment = f"access_token={session['access_token']}&refresh_token=refresh-e2e&expires_in=3600&token_type=bearer&type=magiclink"
+    return RedirectResponse(f"/#{fragment}")
 
 
 @app.post("/auth/v1/verify")

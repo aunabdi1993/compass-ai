@@ -22,6 +22,18 @@ export function useAuth(): AuthValue {
   return value;
 }
 
+/** If an emailed link was expired or already used, Supabase sends the user back with the reason in the URL. */
+export function linkErrorFromUrl(hash: string): string | null {
+  const params = new URLSearchParams(hash.replace(/^#/, ""));
+  const description = params.get("error_description") ?? params.get("error");
+  if (!description) return null;
+  const code = params.get("error_code") ?? "";
+  if (code.includes("expired") || description.toLowerCase().includes("expired") || description.toLowerCase().includes("invalid")) {
+    return "That sign-in link has expired or was already used. Enter your email to get a new one.";
+  }
+  return "That sign-in link didn't work. Enter your email to get a new one.";
+}
+
 /** Turn Supabase's error text into something a user can act on. */
 export function friendlyAuthError(message: string): string {
   const text = message.toLowerCase();
@@ -76,7 +88,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sendCode = useCallback(async (address: string) => {
     const { error: err } = await client.current!.auth.signInWithOtp({
       email: address,
-      options: { shouldCreateUser: true },
+      // Where the emailed link brings the user back to; supabase-js then signs them in from the URL.
+      options: { shouldCreateUser: true, emailRedirectTo: window.location.origin },
     });
     if (err) throw new Error(friendlyAuthError(err.message));
   }, []);

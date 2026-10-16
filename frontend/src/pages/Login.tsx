@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Logo } from "../components/Logo";
-import { useAuth } from "../lib/auth";
+import { linkErrorFromUrl, useAuth } from "../lib/auth";
 
 export function Login() {
   const { sendCode, verifyCode } = useAuth();
@@ -8,7 +8,11 @@ export function Login() {
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => {
+    const message = linkErrorFromUrl(window.location.hash); // e.g. an expired emailed link
+    if (message) window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    return message;
+  });
   const [notice] = useState<string | null>(() => {
     try {
       const saved = sessionStorage.getItem("compass-notice"); // e.g. "your data has been deleted"
@@ -63,14 +67,18 @@ export function Login() {
               onChange={(e) => setEmail(e.target.value)} />
             {error && <p className="error" role="alert">{error}</p>}
             <button className="btn primary block" disabled={busy || !email.trim()}>
-              {busy ? "Sending…" : "Email me a code"}
+              {busy ? "Sending…" : "Email me a sign-in link"}
             </button>
           </form>
         ) : (
           <form onSubmit={onVerify}>
-            <p className="notice">We sent a code to <strong>{sentTo}</strong>. It can take a minute to arrive.</p>
+            <p className="notice">
+              We emailed <strong>{sentTo}</strong>. <strong>Click the sign-in link in the email</strong> and you'll be
+              signed in. It can take a minute to arrive.
+            </p>
+            <p className="muted">If the email contains a code instead, or you opened it on another device, enter it here:</p>
             <label htmlFor="code">Code from the email</label>
-            <input id="code" inputMode="numeric" autoComplete="one-time-code" autoFocus maxLength={10}
+            <input id="code" inputMode="numeric" autoComplete="one-time-code" maxLength={10}
               value={code} onChange={(e) => setCode(e.target.value)} />
             {error && <p className="error" role="alert">{error}</p>}
             <button className="btn primary block" disabled={busy || !code.trim()}>

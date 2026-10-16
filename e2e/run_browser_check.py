@@ -42,13 +42,37 @@ with sync_playwright() as p:
     page.on("pageerror", lambda e: problems.append(f"page error: {e}"))
     page.on("console", lambda m: problems.append(f"console {m.type}: {m.text}") if m.type == "error" else None)
 
+    # 0. sign in by clicking the emailed link (and an expired one) -----------------------------------------------------------
+    link_ctx = browser.new_context(viewport={"width": 1180, "height": 780})
+    lp = link_ctx.new_page()
+    lp.goto(BASE)
+    lp.get_by_label("Email address").fill("link-user@example.com")
+    lp.get_by_role("button", name="Email me a sign-in link").click()
+    expect(lp.get_by_text("Click the sign-in link in the email")).to_be_visible()
+    redirect = lp.request.get(f"{BASE}/e2e/last-redirect").json()["redirect_to"]
+    assert redirect == BASE, f"the app should ask Supabase to send the link back to {BASE}, got {redirect}"
+    lp.screenshot(path=SHOTS / "00-login-link-sent.png")
+    lp.goto(f"{BASE}/e2e/magic-link")  # = the user clicking the link in the email
+    expect(lp.get_by_role("heading", name="Welcome to Compass")).to_be_visible()
+    assert "access_token" not in lp.url, f"tokens left in the address bar: {lp.url}"  # supabase-js removes them
+    link_ctx.close()
+    step("signing in by clicking the emailed link works, and the app tells Supabase where to send it")
+
+    expired_ctx = browser.new_context(viewport={"width": 1180, "height": 780})
+    ep = expired_ctx.new_page()
+    ep.goto(f"{BASE}/#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired")
+    expect(ep.get_by_role("alert")).to_contain_text("expired or was already used")
+    ep.screenshot(path=SHOTS / "00-login-link-expired.png")
+    expired_ctx.close()
+    step("an expired or reused link shows a clear message")
+
     # 1. sign in -------------------------------------------------------------------------------------------
     page.goto(BASE)
     expect(page.get_by_role("heading", name="Compass")).to_be_visible()
     page.screenshot(path=SHOTS / "01-login.png")
     page.get_by_label("Email address").fill("aun@example.com")
-    page.get_by_role("button", name="Email me a code").click()
-    expect(page.get_by_text("We sent a code to")).to_be_visible()
+    page.get_by_role("button", name="Email me a sign-in link").click()
+    expect(page.get_by_text("Click the sign-in link in the email")).to_be_visible()
     page.get_by_label("Code from the email").fill("123456")
     page.get_by_role("button", name="Sign in").click()
     step("signed in with the emailed code (real JWT, verified through JWKS)")
