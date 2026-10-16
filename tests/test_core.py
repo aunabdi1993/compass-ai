@@ -133,3 +133,23 @@ def test_dotenv_file_is_loaded_without_overriding_real_variables(tmp_path, monke
 
     assert (os.environ["FOO_TEST"], os.environ["BAR_TEST"], os.environ["KEPT_TEST"]) == ("from-file", "quoted value", "real")
     load_dotenv_file(tmp_path / "missing.env")  # no error
+
+
+def test_missing_config_error_points_to_dot_env_not_the_example_file():
+    with pytest.raises(RuntimeError) as info:
+        load_settings({})
+    message = str(info.value)
+    assert ".env" in message and "copy .env.example to .env" in message and "not read" in message
+    assert all(name in message for name in ("OPENROUTER_API_KEY", "SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY"))
+
+
+def test_dotenv_values_with_inline_spaces_and_quotes(tmp_path, monkeypatch):
+    import os
+
+    from compass.config import load_dotenv_file
+
+    (tmp_path / ".env").write_text("SPACED_TEST = value with spaces \nSINGLE_TEST='single'\n")
+    monkeypatch.delenv("SPACED_TEST", raising=False)
+    monkeypatch.delenv("SINGLE_TEST", raising=False)
+    load_dotenv_file(tmp_path / ".env")
+    assert (os.environ["SPACED_TEST"], os.environ["SINGLE_TEST"]) == ("value with spaces", "single")

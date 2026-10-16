@@ -69,7 +69,9 @@ def load_settings(env=None) -> Settings:
     missing = [name for name, value in values.items() if not value]
     if missing:
         raise RuntimeError(
-            "Missing configuration: " + ", ".join(missing) + ". Set them in .env or as environment variables."
+            "Missing configuration: " + ", ".join(missing) + ". Put them in a file named .env in the project folder "
+            "(copy .env.example to .env and fill it in; .env.example itself is only a template and is not read), "
+            "or set them as environment variables."
         )
     if _is_privileged_key(values["SUPABASE_PUBLISHABLE_KEY"]):
         raise RuntimeError(
