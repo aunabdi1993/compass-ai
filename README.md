@@ -37,6 +37,6 @@ Push to GitHub, create an app on Streamlit Community Cloud pointing at `app.py`,
 
 ## Model
 
-Defaults to `meta-llama/llama-4-maverick` (1M-token context) through OpenRouter's OpenAI-compatible API. Set `COMPASS_MODEL` to any other OpenRouter model slug, for example `meta-llama/llama-4-scout`. Re-run the evals after changing it.
+Defaults to `meta-llama/llama-4-maverick` (1M-token context) through OpenRouter's chat completions API (plain `requests`, see `compass/llm.py`). Set `COMPASS_MODEL` to any other OpenRouter model slug, for example `meta-llama/llama-4-scout`. Re-run the evals after changing it.
 
 Note that OpenRouter routes to third-party hosts, so check the provider and data-retention settings on your OpenRouter account before real users share CVs and chats.

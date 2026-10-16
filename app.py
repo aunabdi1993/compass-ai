@@ -1,12 +1,18 @@
 """Compass: Streamlit entry point. Run with `streamlit run app.py`."""
 
-import openai
 import streamlit as st
 
 from compass import auth
 from compass.config import load_settings
 from compass.db import Store
-from compass.llm import make_client, stream_reply, to_api_messages
+from compass.llm import (
+    LLMConnectionError,
+    LLMError,
+    LLMRateLimitError,
+    OpenRouterClient,
+    stream_reply,
+    to_api_messages,
+)
 from compass.memory import SUMMARIES_IN_PROMPT, catch_up, end_conversation
 from compass.prompts import build_system_prompt
 
@@ -20,8 +26,8 @@ GREETING = (
 
 
 @st.cache_resource
-def llm_client(api_key: str, site_url: str | None) -> openai.OpenAI:
-    return make_client(api_key, site_url)
+def llm_client(api_key: str, site_url: str | None) -> OpenRouterClient:
+    return OpenRouterClient(api_key, site_url)
 
 
 def _load_context(store: Store) -> None:
@@ -29,7 +35,7 @@ def _load_context(store: Store) -> None:
     st.session_state["summaries"] = store.recent_summaries(SUMMARIES_IN_PROMPT)
 
 
-def chat_page(settings, store: Store, llm: openai.OpenAI) -> None:
+def chat_page(settings, store: Store, llm: OpenRouterClient) -> None:
     state = st.session_state
     state.setdefault("history", [])
     st.title("Compass")
@@ -65,14 +71,15 @@ def chat_page(settings, store: Store, llm: openai.OpenAI) -> None:
     try:
         with st.chat_message("assistant"):
             text = st.write_stream(reply)
-    except openai.RateLimitError:
+    except LLMRateLimitError:
         st.error("Compass is busy right now. Please try again in a minute.")
         return
-    except openai.APIConnectionError:
+    except LLMConnectionError:
         st.error("Couldn't reach the coaching service. Check your connection and try again.")
         return
-    except openai.APIStatusError as exc:
-        st.error(f"The coaching service returned an error ({exc.status_code}). Please try again.")
+    except LLMError as exc:
+        code = f" ({exc.status_code})" if exc.status_code else ""
+        st.error(f"The coaching service returned an error{code}. Please try again.")
         return
 
     state["history"].append({"role": "assistant", "content": text})

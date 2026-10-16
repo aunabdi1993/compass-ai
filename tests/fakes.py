@@ -1,33 +1,24 @@
-from types import SimpleNamespace
-
-
 def _chunk(content=None, finish=None):
-    return SimpleNamespace(
-        choices=[SimpleNamespace(delta=SimpleNamespace(content=content), finish_reason=finish)]
-    )
-
-
-class FakeCompletions:
-    def __init__(self, chunks=("Hello ", "there."), finish_reason="stop", summary="- a\n- b\n- c\n- d\n- e"):
-        self.chunks, self.finish_reason, self.summary = chunks, finish_reason, summary
-        self.stream_calls, self.create_calls = [], []
-
-    def create(self, stream=False, **kwargs):
-        if not stream:
-            self.create_calls.append(kwargs)
-            message = SimpleNamespace(content=self.summary)
-            return SimpleNamespace(choices=[SimpleNamespace(message=message)])
-        self.stream_calls.append(kwargs)
-        events = [SimpleNamespace(choices=[])]  # providers sometimes send empty-choice chunks
-        events += [_chunk(c) for c in self.chunks]
-        events.append(_chunk(None, self.finish_reason))
-        return iter(events)
+    return {"choices": [{"delta": {"content": content}, "finish_reason": finish}]}
 
 
 class FakeLLM:
-    def __init__(self, **kwargs):
-        self.completions = FakeCompletions(**kwargs)
-        self.chat = SimpleNamespace(completions=self.completions)
+    """Stand-in for compass.llm.OpenRouterClient."""
+
+    def __init__(self, chunks=("Hello ", "there."), finish_reason="stop", summary="- a\n- b\n- c\n- d\n- e"):
+        self.chunks, self.finish_reason, self.summary = chunks, finish_reason, summary
+        self.stream_calls, self.chat_calls = [], []
+
+    def stream_chat(self, model, messages, max_tokens):
+        self.stream_calls.append({"model": model, "messages": messages, "max_tokens": max_tokens})
+        yield {"choices": []}  # providers sometimes send empty-choice chunks
+        for text in self.chunks:
+            yield _chunk(text)
+        yield _chunk(None, self.finish_reason)
+
+    def chat(self, model, messages, max_tokens):
+        self.chat_calls.append({"model": model, "messages": messages, "max_tokens": max_tokens})
+        return {"choices": [{"message": {"content": self.summary}}]}
 
 
 class FakeStore:

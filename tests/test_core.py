@@ -1,7 +1,7 @@
 import pytest
 
 from compass.config import load_settings
-from compass.llm import REFUSAL_NOTICE, make_client, TRUNCATED_NOTICE, stream_reply, summarise_conversation, to_api_messages
+from compass.llm import REFUSAL_NOTICE, TRUNCATED_NOTICE, stream_reply, summarise_conversation, to_api_messages
 from compass.memory import catch_up, end_conversation
 from compass.prompts import COACH_PROMPT, build_system_prompt
 from tests.fakes import FakeLLM, FakeStore
@@ -47,7 +47,7 @@ def test_stream_reply_yields_text_and_records_stop_reason():
     reply = stream_reply(llm, "m", "sys", [{"role": "user", "content": "hi"}])
     assert "".join(reply) == "Hello there."
     assert reply.stop_reason == "stop"
-    call = llm.completions.stream_calls[0]
+    call = llm.stream_calls[0]
     assert call["model"] == "m"
     assert call["messages"] == [
         {"role": "system", "content": "sys"},
@@ -64,7 +64,7 @@ def test_stream_reply_notices(stop, notice):
 def test_summarise_skips_one_sided_conversations():
     llm = FakeLLM()
     assert summarise_conversation(llm, "m", [{"role": "user", "content": "hi"}]) == ""
-    assert llm.completions.create_calls == []
+    assert llm.chat_calls == []
 
 
 def test_summarise_reads_text_blocks_only():
@@ -98,11 +98,3 @@ def test_load_settings(monkeypatch):
     assert s.model == "meta-llama/llama-4-maverick" and s.daily_message_limit == 50
     monkeypatch.setenv("COMPASS_MODEL", "meta-llama/llama-4-scout")
     assert load_settings({"OPENROUTER_API_KEY": "k", "SUPABASE_URL": "u", "SUPABASE_ANON_KEY": "a"}).model == "meta-llama/llama-4-scout"
-
-
-def test_make_client_attribution_headers():
-    client = make_client("k", "https://example.com")
-    assert str(client.base_url).startswith("https://openrouter.ai/api/v1")
-    assert client.default_headers["X-OpenRouter-Title"] == "Compass"
-    assert client.default_headers["HTTP-Referer"] == "https://example.com"
-    assert "HTTP-Referer" not in make_client("k").default_headers
