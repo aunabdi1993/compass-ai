@@ -67,6 +67,21 @@ class FakeStore:
     def get_messages(self, cid):
         return self.conversations[cid]["messages"]
 
+    def get_conversation(self, cid):
+        conv = self.conversations.get(cid)
+        return {"id": cid, "summary": conv["summary"]} if conv else None
+
+    def clear_summary(self, cid):
+        self.conversations[cid]["summary"] = None
+
+    def list_conversations(self, limit=30):
+        out = []
+        for cid in reversed(self.order):
+            first = next((m["content"] for m in self.conversations[cid]["messages"] if m["role"] == "user"), "New conversation")
+            out.append({"id": cid, "created_at": "2026-10-01T00:00:00", "title": first[:70],
+                        "ended": bool(self.conversations[cid]["summary"])})
+        return out[:limit]
+
     def count_user_messages_today(self):
         return self.today
 

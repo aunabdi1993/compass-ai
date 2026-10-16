@@ -1,9 +1,10 @@
-"""Settings, read from Streamlit secrets with an environment-variable fallback."""
+"""Settings, read from environment variables (a local .env file is loaded by compass.server)."""
 
 import base64
 import json
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 DEFAULT_MODEL = "meta-llama/llama-4-maverick"  # OpenRouter slug
 BASE_URL = "https://openrouter.ai/api/v1"
@@ -16,17 +17,31 @@ class Settings:
     supabase_url: str
     supabase_key: str  # publishable (formerly anon) key, never the secret key
     model: str = DEFAULT_MODEL
-    site_url: str | None = None
     daily_message_limit: int = DEFAULT_DAILY_MESSAGE_LIMIT
+    site_url: str | None = None
+    jwks_url: str | None = None
+
+    @property
+    def jwt_issuer(self) -> str:
+        return f"{self.supabase_url.rstrip('/')}/auth/v1"
+
+    @property
+    def jwks_endpoint(self) -> str:
+        return self.jwks_url or f"{self.jwt_issuer}/.well-known/jwks.json"
 
 
-def _lookup(name, secrets):
-    try:
-        if name in secrets:
-            return str(secrets[name])
-    except Exception:  # no secrets.toml at all
-        pass
-    return os.environ.get(name)
+def load_dotenv_file(path: str | Path = ".env") -> None:
+    """Load KEY=value lines from a .env file into the environment (existing variables win)."""
+    path = Path(path)
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        value = value.strip().strip("\"'")
+        os.environ.setdefault(key.strip(), value)
 
 
 def _is_privileged_key(key: str) -> bool:
@@ -41,21 +56,20 @@ def _is_privileged_key(key: str) -> bool:
         return False
 
 
-def load_settings(secrets=None) -> Settings:
-    secrets = secrets if secrets is not None else {}
-    values = {
-        name: _lookup(name, secrets) for name in ("OPENROUTER_API_KEY", "SUPABASE_URL")
-    }
+def load_settings(env=None) -> Settings:
+    env = os.environ if env is None else env
+
+    def get(name):
+        value = env.get(name)
+        return str(value).strip() if value else None
+
+    values = {name: get(name) for name in ("OPENROUTER_API_KEY", "SUPABASE_URL")}
     # SUPABASE_ANON_KEY is the legacy name for the publishable key.
-    values["SUPABASE_PUBLISHABLE_KEY"] = _lookup("SUPABASE_PUBLISHABLE_KEY", secrets) or _lookup(
-        "SUPABASE_ANON_KEY", secrets
-    )
+    values["SUPABASE_PUBLISHABLE_KEY"] = get("SUPABASE_PUBLISHABLE_KEY") or get("SUPABASE_ANON_KEY")
     missing = [name for name, value in values.items() if not value]
     if missing:
         raise RuntimeError(
-            "Missing configuration: "
-            + ", ".join(missing)
-            + ". Set them in .streamlit/secrets.toml or as environment variables."
+            "Missing configuration: " + ", ".join(missing) + ". Set them in .env or as environment variables."
         )
     if _is_privileged_key(values["SUPABASE_PUBLISHABLE_KEY"]):
         raise RuntimeError(
@@ -66,9 +80,8 @@ def load_settings(secrets=None) -> Settings:
         openrouter_api_key=values["OPENROUTER_API_KEY"],
         supabase_url=values["SUPABASE_URL"],
         supabase_key=values["SUPABASE_PUBLISHABLE_KEY"],
-        model=_lookup("COMPASS_MODEL", secrets) or DEFAULT_MODEL,
-        site_url=_lookup("COMPASS_SITE_URL", secrets),
-        daily_message_limit=int(
-            _lookup("MAX_USER_MESSAGES_PER_DAY", secrets) or DEFAULT_DAILY_MESSAGE_LIMIT
-        ),
+        model=get("COMPASS_MODEL") or DEFAULT_MODEL,
+        daily_message_limit=int(get("MAX_USER_MESSAGES_PER_DAY") or DEFAULT_DAILY_MESSAGE_LIMIT),
+        site_url=get("COMPASS_SITE_URL"),
+        jwks_url=get("SUPABASE_JWKS_URL"),
     )

@@ -12,8 +12,6 @@ class Store:
         self._user_id = user_id
 
     def _table(self, name: str):
-        # get_session() refreshes the access token if it has expired.
-        self._client.auth.get_session()
         return self._client.table(name)
 
     # profile ---------------------------------------------------------------
@@ -55,7 +53,7 @@ class Store:
     def get_messages(self, conversation_id: str) -> list[dict]:
         res = (
             self._table("messages")
-            .select("role, content, created_at")
+            .select("id, role, content, created_at, feedback")
             .eq("conversation_id", conversation_id)
             .order("id")
             .execute()
@@ -161,5 +159,57 @@ class Store:
     # privacy ---------------------------------------------------------------
     def delete_my_data(self) -> None:
         """Remove chats, documents, profile and consent in one database call."""
-        self._client.auth.get_session()  # refresh the access token first
         self._client.rpc("delete_my_data").execute()
+
+    # conversation history ----------------------------------------------------
+    def get_conversation(self, conversation_id: str) -> dict | None:
+        res = (
+            self._table("conversations")
+            .select("id, created_at, summary")
+            .eq("id", conversation_id)
+            .eq("user_id", self._user_id)
+            .limit(1)
+            .execute()
+        )
+        return res.data[0] if res.data else None
+
+    def clear_summary(self, conversation_id: str) -> None:
+        """A conversation that gets new messages needs a fresh summary later."""
+        self._table("conversations").update({"summary": None}).eq("id", conversation_id).eq(
+            "user_id", self._user_id
+        ).execute()
+
+    def list_conversations(self, limit: int = 30) -> list[dict]:
+        """Newest first, each with a title taken from its first user message."""
+        convs = (
+            self._table("conversations")
+            .select("id, created_at, summary")
+            .eq("user_id", self._user_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+            .data
+        )
+        if not convs:
+            return []
+        firsts = (
+            self._table("messages")
+            .select("conversation_id, content")
+            .in_("conversation_id", [c["id"] for c in convs])
+            .eq("role", "user")
+            .order("id")
+            .execute()
+            .data
+        )
+        titles: dict[str, str] = {}
+        for row in firsts:
+            titles.setdefault(row["conversation_id"], row["content"])
+        return [
+            {
+                "id": c["id"],
+                "created_at": c["created_at"],
+                "title": " ".join(titles.get(c["id"], "New conversation").split())[:70],
+                "ended": bool(c.get("summary")),
+            }
+            for c in convs
+        ]

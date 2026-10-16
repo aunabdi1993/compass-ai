@@ -2,42 +2,73 @@
 
 Career coach for people who are currently employed and want to grow: perform better in their role, build skills, win a promotion, or move to a better job.
 
-Stack (chosen for speed): Python + Streamlit, Llama 4 Maverick (Meta) via OpenRouter, Supabase (login + database), Streamlit Community Cloud.
+**Stack:** React + TypeScript (Vite) frontend, FastAPI backend, Supabase (sign-in + database), Llama 4 Maverick (Meta) through OpenRouter.
 
-## Status: Phase 1, Weeks 1 and 2
+```
+frontend/   React app (Vite, TypeScript). Signs users in with Supabase and calls the API.
+compass/    Python: api.py (HTTP), jwt_auth.py, prompts, llm (OpenRouter), memory, documents, db, anonymise
+database/   schema.sql (+ migrations/)
+evals/      the 20 scenarios and the scoring runner
+e2e/        a no-accounts fake stack and a real-browser check
+tests/      pytest suite for the backend
+```
 
-Week 1 (core coach)
-- Streaming chat using the Compass system prompt (`compass/prompts.py`)
-- Supabase email login, one account per user, every conversation saved
-- Profile page (role, industry, goals, pasted CV) injected into the prompt
-- Memory: when a session ends the model writes a 5-line note; the last 5 notes go into the next session's prompt. If someone just closes the tab, the note is written the next time they log in.
-- Per-user daily message limit as a cost guard (default 50, `MAX_USER_MESSAGES_PER_DAY`)
+How it fits together: the browser signs in with Supabase (emailed code), gets a JWT, and sends it with every call to `/api/...`. The API verifies the JWT against Supabase's JWKS, then talks to the database **as that user**, so Row Level Security keeps everyone's data apart. In production the FastAPI process also serves the built React app, so there is one thing to deploy.
 
-Week 2 (safe, and ready to test)
-- **Documents:** users upload PDF, Word, text or Markdown files (CV, job description, review notes). Only the extracted text is kept. Each document can be switched on or off or removed, and the switched-on ones go into every conversation (newest first, up to 80,000 characters in total), so the coach's advice stays relevant. The coach refers to documents by name. Uploaded text is wrapped as data, so instructions hidden in a document are not followed.
-- **Consent screen** on first login, with a separate, optional, default-off tick box for using anonymised chats in training. Nothing is loaded or sent to the model until the user agrees. Bump `CONSENT_VERSION` in `compass/consent.py` to ask everyone again.
+## What's built
+
+- **Chat:** streaming replies (server-sent events), markdown, thumbs up/down saved on each reply, past conversations in the sidebar (reopen and continue), starter prompts.
+- **Memory:** "End session" has the model write a 5-line note; the last 5 notes go into the next conversation. If someone just closes the tab, the note is written the next time they sign in.
+- **Profile** (role, industry, goals, pasted CV) and **Documents** (PDF, Word, text or Markdown; only the extracted text is kept; each can be switched on or off; the switched-on ones go into every conversation, newest first, up to 80,000 characters, and the coach cites them by name). Uploaded text is wrapped as data so instructions hidden in a document are not followed.
+- **Consent screen** on first sign-in with a separate, optional, default-off tick box for using anonymised chats in training. Nothing is loaded or sent to the model until the user agrees. Bump `CONSENT_VERSION` in `compass/consent.py` to ask everyone again.
 - **Privacy page:** change the training opt-in, or **delete my data** (one atomic database call removing chats, summaries, documents, profile and consent record, then sign out).
-- **Thumbs up/down** on every coach reply, saved on the message (`messages.feedback`: 1 or -1).
-- **Anonymisation script** (`scripts/export_training_data.py`, using Microsoft Presidio) that exports only opted-in users' chats with names, emails, phone numbers, URLs, locations and company names replaced.
-- **Evals:** the 20 scenarios and a runner that scores them with a second model against the rubric (`evals/`).
+- **Cost guard:** per-user daily message limit (default 50).
+- **Safety:** JWT verification (signature, issuer, audience, expiry; algorithm-confusion tokens refused), CSP and other security headers, the app refuses to start with a Supabase secret key, no message content in logs.
+- **Evals** and an **anonymised export** for opted-in users (below).
 
 Not yet (Week 3): onboarding testers, monitoring, and the Phase 1 baseline score.
 
 ## Setup
 
-1. **Supabase**: create a project, then run `database/schema.sql` in the SQL editor. It is safe to re-run. If you already ran the Week 1 version, run just `database/migrations/002_week2.sql`.
-2. **Login email**: in Supabase go to Authentication > Email Templates > "Magic Link" and make the body include the code, e.g. `Your Compass sign-in code: {{ .Token }}`. The app asks users to type that code (Streamlit can't read the token from a magic-link redirect).
-3. **Secrets**: copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` and fill in `OPENROUTER_API_KEY`, `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` (Supabase > Settings > API Keys; formerly called the anon key, and the old `SUPABASE_ANON_KEY` name still works). Never use the secret/service-role key or the JWKS URL: the app refuses to start with a secret key, and it doesn't need JWKS because Supabase enforces access through Row Level Security. The file is git-ignored.
-4. **Spend cap**: create an OpenRouter API key at openrouter.ai/keys and give it a credit limit. The in-app daily limit is only a second line of defence.
-5. Run:
+1. **Supabase:** create a project and run `database/schema.sql` in the SQL editor (safe to re-run; if you already ran the Week 1 version, run just `database/migrations/002_week2.sql`).
+2. **Login email:** in Supabase go to Authentication > Email Templates > "Magic Link" and make the body include the code, e.g. `Your Compass sign-in code: {{ .Token }}`. Users type that code into the app.
+3. **Keys:** copy `.env.example` to `.env` and fill in `OPENROUTER_API_KEY`, `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` (Supabase > Settings > API Keys; the old `SUPABASE_ANON_KEY` name still works). `SUPABASE_JWKS_URL` is optional: it defaults to `<SUPABASE_URL>/auth/v1/.well-known/jwks.json`. Never use the secret/service-role key in the app. The API verifies tokens with the JWKS, so your project needs Supabase's asymmetric JWT signing keys (the default for new projects).
+4. **Spend cap:** create the OpenRouter key at openrouter.ai/keys with a credit limit. The in-app daily limit is only a second line of defence.
 
-   ```bash
-   python -m venv .venv && source .venv/bin/activate
-   pip install -r requirements-dev.txt
-   streamlit run app.py
-   ```
+## Run it locally
 
-Tests (no network or keys needed): `pytest`. The anonymiser tests are skipped unless Presidio and a spaCy model are installed (see below).
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+cd frontend && npm install && cd ..
+
+# terminal 1: the API
+uvicorn compass.server:app --reload --port 8000
+# terminal 2: the React dev server (proxies /api to :8000)
+cd frontend && npm run dev          # open http://localhost:5173
+```
+
+Or run it the way production does, as one process: `cd frontend && npm run build`, then `uvicorn compass.server:app --port 8000` and open http://localhost:8000.
+
+Frontend tooling needs Node 20.19+ (or 22.12+).
+
+## Tests
+
+```bash
+pytest                              # backend (no network or keys needed)
+cd frontend && npm test             # frontend: components, API client, streaming parser
+cd frontend && npm run typecheck
+```
+
+**Try the whole app with no accounts:** `e2e/fake_stack.py` runs the real API and the built React app against a fake Supabase sign-in (it issues genuine signed JWTs that the API really verifies) and an in-memory database:
+
+```bash
+cd frontend && npm run build && cd ..
+uvicorn e2e.fake_stack:app --port 8700        # open http://localhost:8700, any email and code work
+python e2e/run_browser_check.py               # drives the whole journey in Chromium and saves screenshots
+```
+
+The anonymiser tests are skipped unless Presidio and a spaCy model are installed (see below).
 
 ## Running the evals
 
@@ -70,7 +101,9 @@ Anonymisation is statistical and will miss some things. Spot-check the output be
 
 ## Deploying
 
-Push to GitHub, create an app on Streamlit Community Cloud pointing at `app.py`, and paste the three secrets into its Secrets box. Cloud installs `requirements.txt` only, so Presidio is not deployed with the app. Then have two friends try it end to end (sign in, consent, upload a document, chat, thumbs, delete) before sending the pitch in `docs/tester-pitch.md`.
+The `Dockerfile` builds the React app and serves it and the API from one container, so any host that runs a Docker image works (Render, Railway, Fly.io, Google Cloud Run, ...). Set `OPENROUTER_API_KEY`, `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` as environment variables on the host; it listens on `$PORT`. Streamlit Community Cloud is no longer used. Check the container builds on your machine or in your host's build logs: it hasn't been built in the environment this was written in.
+
+Before inviting testers, have two friends try it end to end (sign in, consent, upload a document, chat, thumbs, delete), then send the pitch in `docs/tester-pitch.md`.
 
 ## Model
 

@@ -5,7 +5,7 @@
     python -m evals.run_evals run --hand-check         # also write a CSV for you to score by hand
     python -m evals.run_evals agreement RESULTS.json HAND.csv
 
-Needs OPENROUTER_API_KEY (environment variable or .streamlit/secrets.toml). Each full run
+Needs OPENROUTER_API_KEY (environment variable or .env). Each full run
 makes about 40 model calls, so it costs a few cents.
 
 Scoring follows the Phase 1 rubric: five criteria, 1 to 5 each (25 points). Boundary
@@ -19,14 +19,13 @@ import os
 import random
 import re
 import sys
-import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from compass.config import DEFAULT_MODEL  # noqa: E402
+from compass.config import DEFAULT_MODEL, load_dotenv_file  # noqa: E402
 from compass.llm import CHAT_MAX_TOKENS, OpenRouterClient  # noqa: E402
 from compass.prompts import build_system_prompt  # noqa: E402
 
@@ -69,13 +68,10 @@ def load_scenarios(only: set[int] | None = None) -> list[dict]:
 
 
 def get_api_key() -> str:
+    load_dotenv_file(ROOT / ".env")
     key = os.environ.get("OPENROUTER_API_KEY")
     if not key:
-        secrets = ROOT / ".streamlit" / "secrets.toml"
-        if secrets.exists():
-            key = tomllib.loads(secrets.read_text()).get("OPENROUTER_API_KEY")
-    if not key:
-        sys.exit("Set OPENROUTER_API_KEY (environment variable or .streamlit/secrets.toml).")
+        sys.exit("Set OPENROUTER_API_KEY (environment variable or .env).")
     return key
 
 

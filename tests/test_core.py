@@ -89,32 +89,47 @@ def test_end_conversation_and_catch_up():
     assert len(store.recent_summaries()) == 2
 
 
-def test_load_settings(monkeypatch):
-    for name in ("OPENROUTER_API_KEY", "SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_ANON_KEY", "COMPASS_MODEL"):
-        monkeypatch.delenv(name, raising=False)
+BASE = {"OPENROUTER_API_KEY": "k", "SUPABASE_URL": "https://abc.supabase.co", "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_a"}
+
+
+def test_load_settings_defaults_and_overrides():
     with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
         load_settings({})
-    s = load_settings({"OPENROUTER_API_KEY": "k", "SUPABASE_URL": "u", "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_a"})
+    s = load_settings(BASE)
     assert s.model == "meta-llama/llama-4-maverick" and s.daily_message_limit == 50
-    monkeypatch.setenv("COMPASS_MODEL", "meta-llama/llama-4-scout")
-    assert load_settings({"OPENROUTER_API_KEY": "k", "SUPABASE_URL": "u", "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_a"}).model == "meta-llama/llama-4-scout"
+    assert s.jwt_issuer == "https://abc.supabase.co/auth/v1"
+    assert s.jwks_endpoint == "https://abc.supabase.co/auth/v1/.well-known/jwks.json"
+    custom = load_settings({**BASE, "COMPASS_MODEL": "meta-llama/llama-4-scout", "SUPABASE_JWKS_URL": "https://x/jwks", "MAX_USER_MESSAGES_PER_DAY": "7"})
+    assert (custom.model, custom.jwks_endpoint, custom.daily_message_limit) == ("meta-llama/llama-4-scout", "https://x/jwks", 7)
 
 
-def test_legacy_anon_key_name_still_works(monkeypatch):
-    monkeypatch.delenv("SUPABASE_PUBLISHABLE_KEY", raising=False)
-    s = load_settings({"OPENROUTER_API_KEY": "k", "SUPABASE_URL": "u", "SUPABASE_ANON_KEY": "anon"})
-    assert s.supabase_key == "anon"
+def test_legacy_anon_key_name_still_works():
+    env = {k: v for k, v in BASE.items() if k != "SUPABASE_PUBLISHABLE_KEY"} | {"SUPABASE_ANON_KEY": "anon"}
+    assert load_settings(env).supabase_key == "anon"
 
 
 def test_secret_keys_are_rejected():
     import base64, json
 
-    def jwt(role):
+    def jwt_with(role):
         body = base64.urlsafe_b64encode(json.dumps({"role": role}).encode()).decode().rstrip("=")
         return f"h.{body}.s"
 
-    base = {"OPENROUTER_API_KEY": "k", "SUPABASE_URL": "u"}
-    for bad in ("sb_secret_abc", jwt("service_role")):
+    for bad in ("sb_secret_abc", jwt_with("service_role")):
         with pytest.raises(RuntimeError, match="secret"):
-            load_settings({**base, "SUPABASE_PUBLISHABLE_KEY": bad})
-    assert load_settings({**base, "SUPABASE_PUBLISHABLE_KEY": jwt("anon")}).supabase_key
+            load_settings({**BASE, "SUPABASE_PUBLISHABLE_KEY": bad})
+    assert load_settings({**BASE, "SUPABASE_PUBLISHABLE_KEY": jwt_with("anon")}).supabase_key
+
+
+def test_dotenv_file_is_loaded_without_overriding_real_variables(tmp_path, monkeypatch):
+    from compass.config import load_dotenv_file
+
+    (tmp_path / ".env").write_text("# comment\nFOO_TEST=from-file\nBAR_TEST=\"quoted value\"\nKEPT_TEST=file\n")
+    monkeypatch.setenv("KEPT_TEST", "real")
+    monkeypatch.delenv("FOO_TEST", raising=False)
+    monkeypatch.delenv("BAR_TEST", raising=False)
+    load_dotenv_file(tmp_path / ".env")
+    import os
+
+    assert (os.environ["FOO_TEST"], os.environ["BAR_TEST"], os.environ["KEPT_TEST"]) == ("from-file", "quoted value", "real")
+    load_dotenv_file(tmp_path / "missing.env")  # no error

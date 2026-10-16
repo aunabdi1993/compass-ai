@@ -8,6 +8,7 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_DOC_CHARS = 50_000  # stored per document; the rest is cut and flagged
 PROMPT_BUDGET_CHARS = 80_000  # total document text sent with each message (~20k tokens)
 MIN_USEFUL_CHARS = 200  # don't squeeze in a sliver of a document
+MAX_DOCUMENTS = 10  # per user
 
 
 class DocumentError(ValueError):
@@ -98,3 +99,14 @@ def select_for_prompt(documents: list[dict], budget: int = PROMPT_BUDGET_CHARS) 
         else:
             left_out.append(doc["name"])
     return included, left_out
+
+
+def budget_report(documents: list[dict], budget: int = PROMPT_BUDGET_CHARS) -> dict:
+    """What the Documents page shows: how much of the context is used and what didn't fit."""
+    included, left_out = select_for_prompt(documents, budget)
+    return {
+        "used": sum(len(d["content"]) for d in included),
+        "limit": budget,
+        "left_out": left_out,
+        "clipped": [d["name"] for d in included if d["clipped"]],
+    }

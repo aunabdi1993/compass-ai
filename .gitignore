@@ -3,4 +3,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .env
-.streamlit/secrets.toml
+node_modules/
+frontend/dist/
+e2e/screenshots/
+*.log
