@@ -46,22 +46,25 @@ def test_stream_reply_yields_text_and_records_stop_reason():
     llm = FakeLLM()
     reply = stream_reply(llm, "m", "sys", [{"role": "user", "content": "hi"}])
     assert "".join(reply) == "Hello there."
-    assert reply.stop_reason == "end_turn"
-    call = llm.messages.stream_calls[0]
-    assert call["model"] == "m" and call["system"] == "sys"
-    assert "thinking" not in call and "temperature" not in call
+    assert reply.stop_reason == "stop"
+    call = llm.completions.stream_calls[0]
+    assert call["model"] == "m"
+    assert call["messages"] == [
+        {"role": "system", "content": "sys"},
+        {"role": "user", "content": "hi"},
+    ]
 
 
-@pytest.mark.parametrize("stop,notice", [("refusal", REFUSAL_NOTICE), ("max_tokens", TRUNCATED_NOTICE)])
+@pytest.mark.parametrize("stop,notice", [("content_filter", REFUSAL_NOTICE), ("length", TRUNCATED_NOTICE)])
 def test_stream_reply_notices(stop, notice):
-    reply = stream_reply(FakeLLM(stop_reason=stop), "m", "s", [{"role": "user", "content": "x"}])
+    reply = stream_reply(FakeLLM(finish_reason=stop), "m", "s", [{"role": "user", "content": "x"}])
     assert "".join(reply).endswith(notice)
 
 
 def test_summarise_skips_one_sided_conversations():
     llm = FakeLLM()
     assert summarise_conversation(llm, "m", [{"role": "user", "content": "hi"}]) == ""
-    assert llm.messages.create_calls == []
+    assert llm.completions.create_calls == []
 
 
 def test_summarise_reads_text_blocks_only():
@@ -87,11 +90,11 @@ def test_end_conversation_and_catch_up():
 
 
 def test_load_settings(monkeypatch):
-    for name in ("ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_ANON_KEY", "COMPASS_MODEL"):
+    for name in ("OPENROUTER_API_KEY", "SUPABASE_URL", "SUPABASE_ANON_KEY", "COMPASS_MODEL"):
         monkeypatch.delenv(name, raising=False)
-    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+    with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
         load_settings({})
-    s = load_settings({"ANTHROPIC_API_KEY": "k", "SUPABASE_URL": "u", "SUPABASE_ANON_KEY": "a"})
-    assert s.model == "claude-opus-5-5" and s.daily_message_limit == 50
-    monkeypatch.setenv("COMPASS_MODEL", "claude-sonnet-5-5")
-    assert load_settings({"ANTHROPIC_API_KEY": "k", "SUPABASE_URL": "u", "SUPABASE_ANON_KEY": "a"}).model == "claude-sonnet-5-5"
+    s = load_settings({"OPENROUTER_API_KEY": "k", "SUPABASE_URL": "u", "SUPABASE_ANON_KEY": "a"})
+    assert s.model == "meta-llama/llama-4-maverick" and s.daily_message_limit == 50
+    monkeypatch.setenv("COMPASS_MODEL", "meta-llama/llama-4-scout")
+    assert load_settings({"OPENROUTER_API_KEY": "k", "SUPABASE_URL": "u", "SUPABASE_ANON_KEY": "a"}).model == "meta-llama/llama-4-scout"

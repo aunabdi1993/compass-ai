@@ -3,13 +3,14 @@
 import os
 from dataclasses import dataclass
 
-DEFAULT_MODEL = "claude-opus-5-5"
+DEFAULT_MODEL = "meta-llama/llama-4-maverick"  # OpenRouter slug
+BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_DAILY_MESSAGE_LIMIT = 50
 
 
 @dataclass(frozen=True)
 class Settings:
-    anthropic_api_key: str
+    openrouter_api_key: str
     supabase_url: str
     supabase_anon_key: str
     model: str = DEFAULT_MODEL
@@ -29,7 +30,7 @@ def load_settings(secrets=None) -> Settings:
     secrets = secrets if secrets is not None else {}
     values = {
         name: _lookup(name, secrets)
-        for name in ("ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_ANON_KEY")
+        for name in ("OPENROUTER_API_KEY", "SUPABASE_URL", "SUPABASE_ANON_KEY")
     }
     missing = [name for name, value in values.items() if not value]
     if missing:
@@ -39,7 +40,7 @@ def load_settings(secrets=None) -> Settings:
             + ". Set them in .streamlit/secrets.toml or as environment variables."
         )
     return Settings(
-        anthropic_api_key=values["ANTHROPIC_API_KEY"],
+        openrouter_api_key=values["OPENROUTER_API_KEY"],
         supabase_url=values["SUPABASE_URL"],
         supabase_anon_key=values["SUPABASE_ANON_KEY"],
         model=_lookup("COMPASS_MODEL", secrets) or DEFAULT_MODEL,

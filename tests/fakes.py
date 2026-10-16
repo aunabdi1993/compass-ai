@@ -1,39 +1,33 @@
 from types import SimpleNamespace
 
 
-class FakeStream:
-    def __init__(self, chunks, stop_reason="end_turn"):
-        self.text_stream = iter(chunks)
-        self._stop = stop_reason
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        return False
-
-    def get_final_message(self):
-        return SimpleNamespace(stop_reason=self._stop)
+def _chunk(content=None, finish=None):
+    return SimpleNamespace(
+        choices=[SimpleNamespace(delta=SimpleNamespace(content=content), finish_reason=finish)]
+    )
 
 
-class FakeMessages:
-    def __init__(self, chunks=("Hello ", "there."), stop_reason="end_turn", summary="- a\n- b\n- c\n- d\n- e"):
-        self.chunks, self.stop_reason, self.summary = chunks, stop_reason, summary
+class FakeCompletions:
+    def __init__(self, chunks=("Hello ", "there."), finish_reason="stop", summary="- a\n- b\n- c\n- d\n- e"):
+        self.chunks, self.finish_reason, self.summary = chunks, finish_reason, summary
         self.stream_calls, self.create_calls = [], []
 
-    def stream(self, **kwargs):
+    def create(self, stream=False, **kwargs):
+        if not stream:
+            self.create_calls.append(kwargs)
+            message = SimpleNamespace(content=self.summary)
+            return SimpleNamespace(choices=[SimpleNamespace(message=message)])
         self.stream_calls.append(kwargs)
-        return FakeStream(self.chunks, self.stop_reason)
-
-    def create(self, **kwargs):
-        self.create_calls.append(kwargs)
-        block = SimpleNamespace(type="text", text=self.summary)
-        return SimpleNamespace(content=[SimpleNamespace(type="thinking"), block])
+        events = [SimpleNamespace(choices=[])]  # providers sometimes send empty-choice chunks
+        events += [_chunk(c) for c in self.chunks]
+        events.append(_chunk(None, self.finish_reason))
+        return iter(events)
 
 
 class FakeLLM:
     def __init__(self, **kwargs):
-        self.messages = FakeMessages(**kwargs)
+        self.completions = FakeCompletions(**kwargs)
+        self.chat = SimpleNamespace(completions=self.completions)
 
 
 class FakeStore:

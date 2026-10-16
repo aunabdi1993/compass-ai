@@ -2,7 +2,7 @@
 
 Career coach for people who are currently employed and want to grow: perform better in their role, build skills, win a promotion, or move to a better job.
 
-Stack (chosen for speed): Python + Streamlit, Claude API, Supabase (login + database), Streamlit Community Cloud.
+Stack (chosen for speed): Python + Streamlit, Llama 4 Maverick (Meta) via OpenRouter, Supabase (login + database), Streamlit Community Cloud.
 
 ## Status: Phase 1, Week 1 (core coach)
 
@@ -20,7 +20,7 @@ Not yet (Week 2+): consent screen, delete-my-data, anonymisation, thumbs up/down
 1. **Supabase**: create a project, then run `supabase/schema.sql` in the SQL editor.
 2. **Login email**: in Supabase go to Authentication > Email Templates > "Magic Link" and make the body include the code, e.g. `Your Compass sign-in code: {{ .Token }}`. The app asks users to type that code (Streamlit can't read the token from a magic-link redirect).
 3. **Secrets**: copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` and fill it in. Use the Supabase **anon** key, never the service key. The file is git-ignored.
-4. **Spend cap**: set a monthly limit in the Anthropic Console (Settings > Limits). The in-app daily limit is only a second line of defence.
+4. **Spend cap**: create an OpenRouter API key at openrouter.ai/keys and give it a credit limit. The in-app daily limit is only a second line of defence.
 5. Run:
 
    ```bash
@@ -37,4 +37,6 @@ Push to GitHub, create an app on Streamlit Community Cloud pointing at `app.py`,
 
 ## Model
 
-Defaults to `claude-opus-5-5`. Set `COMPASS_MODEL` to change it (for example `claude-sonnet-5-5` to cut cost). Re-run the evals after changing it.
+Defaults to `meta-llama/llama-4-maverick` (1M-token context) through OpenRouter's OpenAI-compatible API. Set `COMPASS_MODEL` to any other OpenRouter model slug, for example `meta-llama/llama-4-scout`. Re-run the evals after changing it.
+
+Note that OpenRouter routes to third-party hosts, so check the provider and data-retention settings on your OpenRouter account before real users share CVs and chats.

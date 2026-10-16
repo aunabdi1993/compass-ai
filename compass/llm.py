@@ -1,13 +1,23 @@
-"""Anthropic calls: streaming coach replies and end-of-session summaries."""
+"""LLM calls via OpenRouter (OpenAI-compatible API): streaming coach replies and
+end-of-session summaries."""
 
 from collections.abc import Iterator
 
-import anthropic
+import openai
 
+from compass.config import BASE_URL
 from compass.prompts import SUMMARY_PROMPT
 
-CHAT_MAX_TOKENS = 16000
-SUMMARY_MAX_TOKENS = 4000
+CHAT_MAX_TOKENS = 4096
+SUMMARY_MAX_TOKENS = 600
+
+
+def make_client(api_key: str) -> openai.OpenAI:
+    return openai.OpenAI(
+        api_key=api_key,
+        base_url=BASE_URL,
+        default_headers={"X-Title": "Compass"},  # shows in OpenRouter's usage dashboard
+    )
 
 REFUSAL_NOTICE = (
     "\n\n_I can't help with that one. If you rephrase or tell me more about "
@@ -41,19 +51,23 @@ class ReplyStream:
         self._kwargs = dict(
             model=model,
             max_tokens=CHAT_MAX_TOKENS,
-            system=system,
-            messages=messages,
-            output_config={"effort": "medium"},
+            messages=[{"role": "system", "content": system}, *messages],
         )
         self.stop_reason: str | None = None
 
     def __iter__(self) -> Iterator[str]:
-        with self._client.messages.stream(**self._kwargs) as stream:
-            yield from stream.text_stream
-            self.stop_reason = stream.get_final_message().stop_reason
-        if self.stop_reason == "refusal":
+        stream = self._client.chat.completions.create(stream=True, **self._kwargs)
+        for chunk in stream:
+            if not chunk.choices:
+                continue
+            choice = chunk.choices[0]
+            if choice.delta and choice.delta.content:
+                yield choice.delta.content
+            if choice.finish_reason:
+                self.stop_reason = choice.finish_reason
+        if self.stop_reason == "content_filter":
             yield REFUSAL_NOTICE
-        elif self.stop_reason == "max_tokens":
+        elif self.stop_reason == "length":
             yield TRUNCATED_NOTICE
 
 
@@ -69,12 +83,12 @@ def summarise_conversation(client, model: str, rows: list[dict]) -> str:
     transcript = "\n\n".join(
         f"{'User' if m['role'] == 'user' else 'Compass'}: {m['content']}" for m in messages
     )
-    response = client.messages.create(
+    response = client.chat.completions.create(
         model=model,
         max_tokens=SUMMARY_MAX_TOKENS,
-        system=SUMMARY_PROMPT,
-        messages=[{"role": "user", "content": f"<conversation>\n{transcript}\n</conversation>"}],
-        output_config={"effort": "low"},
+        messages=[
+            {"role": "system", "content": SUMMARY_PROMPT},
+            {"role": "user", "content": f"<conversation>\n{transcript}\n</conversation>"},
+        ],
     )
-    text = "".join(block.text for block in response.content if block.type == "text")
-    return text.strip()
+    return (response.choices[0].message.content or "").strip()

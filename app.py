@@ -1,12 +1,12 @@
 """Compass: Streamlit entry point. Run with `streamlit run app.py`."""
 
-import anthropic
+import openai
 import streamlit as st
 
 from compass import auth
 from compass.config import load_settings
 from compass.db import Store
-from compass.llm import stream_reply, to_api_messages
+from compass.llm import make_client, stream_reply, to_api_messages
 from compass.memory import SUMMARIES_IN_PROMPT, catch_up, end_conversation
 from compass.prompts import build_system_prompt
 
@@ -20,8 +20,8 @@ GREETING = (
 
 
 @st.cache_resource
-def anthropic_client(api_key: str) -> anthropic.Anthropic:
-    return anthropic.Anthropic(api_key=api_key)
+def llm_client(api_key: str) -> openai.OpenAI:
+    return make_client(api_key)
 
 
 def _load_context(store: Store) -> None:
@@ -29,7 +29,7 @@ def _load_context(store: Store) -> None:
     st.session_state["summaries"] = store.recent_summaries(SUMMARIES_IN_PROMPT)
 
 
-def chat_page(settings, store: Store, llm: anthropic.Anthropic) -> None:
+def chat_page(settings, store: Store, llm: openai.OpenAI) -> None:
     state = st.session_state
     state.setdefault("history", [])
     st.title("Compass")
@@ -65,13 +65,13 @@ def chat_page(settings, store: Store, llm: anthropic.Anthropic) -> None:
     try:
         with st.chat_message("assistant"):
             text = st.write_stream(reply)
-    except anthropic.RateLimitError:
+    except openai.RateLimitError:
         st.error("Compass is busy right now. Please try again in a minute.")
         return
-    except anthropic.APIConnectionError:
+    except openai.APIConnectionError:
         st.error("Couldn't reach the coaching service. Check your connection and try again.")
         return
-    except anthropic.APIStatusError as exc:
+    except openai.APIStatusError as exc:
         st.error(f"The coaching service returned an error ({exc.status_code}). Please try again.")
         return
 
@@ -122,7 +122,7 @@ def main() -> None:
         st.stop()
 
     store = Store(client, user.id)
-    llm = anthropic_client(settings.anthropic_api_key)
+    llm = llm_client(settings.openrouter_api_key)
     state = st.session_state
 
     if "profile" not in state:
