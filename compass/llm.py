@@ -12,12 +12,12 @@ CHAT_MAX_TOKENS = 4096
 SUMMARY_MAX_TOKENS = 600
 
 
-def make_client(api_key: str) -> openai.OpenAI:
-    return openai.OpenAI(
-        api_key=api_key,
-        base_url=BASE_URL,
-        default_headers={"X-Title": "Compass"},  # shows in OpenRouter's usage dashboard
-    )
+def make_client(api_key: str, site_url: str | None = None) -> openai.OpenAI:
+    # Optional attribution headers, shown on OpenRouter's dashboard and rankings.
+    headers = {"X-OpenRouter-Title": "Compass"}
+    if site_url:
+        headers["HTTP-Referer"] = site_url
+    return openai.OpenAI(api_key=api_key, base_url=BASE_URL, default_headers=headers)
 
 REFUSAL_NOTICE = (
     "\n\n_I can't help with that one. If you rephrase or tell me more about "

@@ -14,6 +14,7 @@ class Settings:
     supabase_url: str
     supabase_anon_key: str
     model: str = DEFAULT_MODEL
+    site_url: str | None = None
     daily_message_limit: int = DEFAULT_DAILY_MESSAGE_LIMIT
 
 
@@ -44,6 +45,7 @@ def load_settings(secrets=None) -> Settings:
         supabase_url=values["SUPABASE_URL"],
         supabase_anon_key=values["SUPABASE_ANON_KEY"],
         model=_lookup("COMPASS_MODEL", secrets) or DEFAULT_MODEL,
+        site_url=_lookup("COMPASS_SITE_URL", secrets),
         daily_message_limit=int(
             _lookup("MAX_USER_MESSAGES_PER_DAY", secrets) or DEFAULT_DAILY_MESSAGE_LIMIT
         ),

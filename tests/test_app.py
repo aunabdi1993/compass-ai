@@ -23,7 +23,7 @@ def env(monkeypatch):
 def make_app(monkeypatch, llm, store, signed_in=True):
     import compass.llm
 
-    monkeypatch.setattr(compass.llm, "make_client", lambda key: llm)
+    monkeypatch.setattr(compass.llm, "make_client", lambda key, site_url=None: llm)
     monkeypatch.setattr(compass.db, "Store", lambda client, uid: store)
     user = SimpleNamespace(id="u1", email="a@example.com") if signed_in else None
     monkeypatch.setattr(compass.auth, "current_user", lambda s: (object(), user))

@@ -20,8 +20,8 @@ GREETING = (
 
 
 @st.cache_resource
-def llm_client(api_key: str) -> openai.OpenAI:
-    return make_client(api_key)
+def llm_client(api_key: str, site_url: str | None) -> openai.OpenAI:
+    return make_client(api_key, site_url)
 
 
 def _load_context(store: Store) -> None:
@@ -122,7 +122,7 @@ def main() -> None:
         st.stop()
 
     store = Store(client, user.id)
-    llm = llm_client(settings.openrouter_api_key)
+    llm = llm_client(settings.openrouter_api_key, settings.site_url)
     state = st.session_state
 
     if "profile" not in state:
